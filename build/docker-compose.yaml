@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  database:
+    image: "postgres:14.0-alpine"
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: F8jhkVmY
+      POSTGRES_DB: slick3
