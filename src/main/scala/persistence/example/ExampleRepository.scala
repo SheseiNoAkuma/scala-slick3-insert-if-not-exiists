@@ -27,11 +27,11 @@ class ExampleRepository(db: Database) {
   }
 
   def insertIfNotExists(e: ExampleEntity): Future[Int] = {
-    var qry =
+    val qry =
       sqlu"""insert into example_table (id, name, date_time, note) 
               select ${e.id}, ${e.name}, ${e.dateTime}, ${e.note} 
                 where not exists (select 1 from example_table where name = ${e.name})"""
-    db.run(qry)
+    db.run(qry.transactionally)
   }
 
 }
