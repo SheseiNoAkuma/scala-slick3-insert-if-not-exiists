@@ -17,11 +17,11 @@ import slick.jdbc.PostgresProfile.api._
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.Executors
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 
 class ExampleRepositoryTest extends AnyWordSpec with Matchers with ScalaFutures with BeforeAndAfterAll with BeforeAndAfterEach {
 
-  implicit val patience: PatienceConfig = PatienceConfig(scaled(Span(10000, Millis)), scaled(Span(1500, Millis)))
+  implicit val patience: PatienceConfig     = PatienceConfig(scaled(Span(10000, Millis)), scaled(Span(1500, Millis)))
   implicit val ex: ExecutionContextExecutor = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
 
   lazy val db = Database.forConfig("database")
@@ -42,7 +42,7 @@ class ExampleRepositoryTest extends AnyWordSpec with Matchers with ScalaFutures 
   "insert" should {
 
     "insert record if not exists" in {
-      val actual   = sut.insert(ExampleEntity(UUID.randomUUID(), "whatever", Instant.now, None))
+      val actual = sut.insert(ExampleEntity(UUID.randomUUID(), "whatever", Instant.now, None))
       whenReady(actual)(r => r shouldBe 1)
     }
 
@@ -53,7 +53,34 @@ class ExampleRepositoryTest extends AnyWordSpec with Matchers with ScalaFutures 
         a <- sut.insert(expected)
       } yield a
 
-        whenReady(actual.failed)(r => r shouldBe a [JdbcSQLIntegrityConstraintViolationException])
+      whenReady(actual.failed)(r => r shouldBe a[JdbcSQLIntegrityConstraintViolationException])
+    }
+  }
+
+  "insertIfNotExists" should {
+
+    "insert record if not exists" in {
+      val actual = sut.insertIfNotExists(ExampleEntity(UUID.randomUUID(), "whatever", Instant.now, None))
+      whenReady(actual)(r => r shouldBe 1)
+    }
+
+    "not insert record if already exists" in {
+      val expected = ExampleEntity(UUID.randomUUID(), "whatever", Instant.now, None)
+      val actual = for {
+        _   <- sut.insertIfNotExists(expected)
+        _   <- sut.insertIfNotExists(expected)
+        all <- sut.findAll
+      } yield all.size
+
+      whenReady(actual)(r => r shouldBe 1)
+    }
+
+    "insert only one even in race condition" in {
+      val expected = ExampleEntity(UUID.randomUUID(), "whatever", Instant.now, None)
+
+      val actual = Future.sequence(for (_ <- 1 to 100) yield sut.insertIfNotExists(expected.copy(id = UUID.randomUUID())))
+
+      whenReady(actual)(r => r.sum shouldBe 1)
     }
   }
 
